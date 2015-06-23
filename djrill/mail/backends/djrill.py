@@ -72,20 +72,24 @@ class DjrillBackend(BaseEmailBackend):
         self.api_send = self.api_url + "/messages/send.json"
         self.api_send_template = self.api_url + "/messages/send-template.json"
 
+    #added session parameter to use a single connection for each message being sent. 
+    #http://stackoverflow.com/questions/30982717/in-django-send-mass-mail-creates-a-new-http-connection-everytime-it-sends-a-mail
+    
     def send_messages(self, email_messages):
         if not email_messages:
             return 0
 
         num_sent = 0
+        session = requests.Session()
         for message in email_messages:
-            sent = self._send(message)
+            sent = self._send(message,session)
 
             if sent:
                 num_sent += 1
-
+        session.close()
         return num_sent
 
-    def _send(self, message):
+    def _send(self, message,session=None):
         if not message.recipients():
             return False
 
@@ -128,8 +132,11 @@ class DjrillBackend(BaseEmailBackend):
                               " Try converting it to a string or number first.",
             ) + err.args[1:]
             raise err
-
-        response = requests.post(api_url, data=api_data)
+        
+        if session:
+            response = session.post(api_url, data=api_data)
+        else:
+            response = requests.post(api_url, data=api_data)
 
         if response.status_code != 200:
 
@@ -150,6 +157,7 @@ class DjrillBackend(BaseEmailBackend):
             return False
 
         # add the response from mandrill to the EmailMessage so callers can inspect it
+        
         message.mandrill_response = response.json()
 
         return True
